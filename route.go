@@ -1,6 +1,8 @@
 package meepo
 
-import "net"
+import (
+	"net"
+)
 
 type Routes struct {
 	nets map[byte][]*net.IPNet
@@ -13,19 +15,29 @@ func NewRoutes() *Routes {
 }
 
 func (r *Routes) Add(cidr string) error {
-	_, ipNet, err := net.ParseCIDR(cidr)
+	ip, ipNet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		return err
 	}
-	r.nets[ipNet.IP.To4()[0]] = append(r.nets[ipNet.IP.To4()[0]], ipNet)
+	if x := ip.To4(); x != nil {
+		ip = x
+	} else {
+		ip = x.To16()
+	}
+	r.nets[ip[0]] = append(r.nets[ip[0]], ipNet)
 	return nil
 }
 
 func (r *Routes) Test(ip net.IP) bool {
-	nets := r.nets[ip.To4()[0]]
+	if x := ip.To4(); x != nil {
+		ip = x
+	} else {
+		ip = x.To16()
+	}
+	nets := r.nets[ip[0]]
 	if len(nets) > 0 {
 		for _, ipNet := range nets {
-			if ipNet.Contains(ip.To4()) {
+			if ipNet.Contains(ip) {
 				return true
 			}
 		}

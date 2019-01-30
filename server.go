@@ -1,8 +1,9 @@
 package meepo
 
 import (
-	"github.com/miekg/dns"
 	"log"
+
+	"github.com/miekg/dns"
 )
 
 func NewServer(target string) *Server {
@@ -17,24 +18,44 @@ type Server struct {
 	client *dns.Client
 }
 
-func (s *Server) Run(addr string) {
+func (s *Server) Run(addr string) error {
 	server := &dns.Server{
-		Addr:addr,
-		Net:"udp",
+		Addr: addr,
+		Net:  "udp",
 	}
 	server.Handler = s
-	panic(server.ListenAndServe())
+
+	log.Printf(`listen on addr: "%s".`, addr)
+
+	return server.ListenAndServe()
 }
 
 func (s *Server) ServeDNS(w dns.ResponseWriter, req *dns.Msg) {
-	resp, _, err := s.client.Exchange(req, s.target)
+	id := randStr(16)
+
+	for _, ques := range req.Question {
+		log.Printf(`[%s][in]class:"%s" type:"%s", name:"%s".`, id, dns.Class(ques.Qclass).String(), dns.Type(ques.Qtype).String(), ques.Name)
+	}
+	resp, t, err := s.client.Exchange(req, s.target)
 	if err != nil {
-		log.Printf("fail to exchange dns: %v.", err)
+		log.Printf(`[%s]fail to exchange dns: "%v"".`, id, err)
 		resp = new(dns.Msg)
 	}
+
+	log.Printf(`[%s][out] in %v.`, id, t)
+
+	for _, ans := range resp.Answer {
+		switch v := ans.(type) {
+		case *dns.A:
+			log.Printf(`[%s][out]name:"%s" a:"%s".`, id, v.Header().Name, v.A.String())
+		default:
+			log.Printf(`[%s][out]%v`, id, v)
+		}
+	}
+
 	resp.SetReply(req)
 	err = w.WriteMsg(resp)
 	if err != nil {
-		log.Printf("fail to send response: %v.", err)
+		log.Printf(`[%s][out]fail to send response: "%v".`, id, err)
 	}
 }
